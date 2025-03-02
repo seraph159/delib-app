@@ -1,6 +1,7 @@
 package com.delibrary.lib_backend.controller;
 
 import com.delibrary.lib_backend.dto.AccountInfoDto;
+import com.delibrary.lib_backend.dto.BorrowDurationRequest;
 import com.delibrary.lib_backend.dto.CreditCardDto;
 import com.delibrary.lib_backend.dto.DocumentSearchDto;
 import com.delibrary.lib_backend.entity.Document;
@@ -48,10 +49,12 @@ public class ClientController {
     }
 
     @PutMapping("/{documentId}/borrow")
-    public ResponseEntity<?> borrowDocument(@PathVariable String documentId) {
+    public ResponseEntity<?> borrowDocument(
+            @PathVariable String documentId,
+            @RequestBody BorrowDurationRequest durationRequest) {
         try {
             String clientEmail = AuthUtils.getAuthenticatedClientEmail();
-            Document borrowedDocument = clientDocumentService.borrowDocument(documentId, clientEmail);
+            Document borrowedDocument = clientDocumentService.borrowDocument(documentId, clientEmail, durationRequest);
             return ResponseEntity.ok(borrowedDocument);
         } catch (DocumentNotFoundException | ClientNotFoundException e) {
             logger.error("Borrowing error: {}", e.getMessage());

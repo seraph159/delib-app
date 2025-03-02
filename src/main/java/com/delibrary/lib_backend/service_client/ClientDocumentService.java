@@ -1,6 +1,7 @@
 package com.delibrary.lib_backend.service_client;
 
 import com.delibrary.lib_backend.dto.AccountInfoDto;
+import com.delibrary.lib_backend.dto.BorrowDurationRequest;
 import com.delibrary.lib_backend.dto.DocumentSearchDto;
 import com.delibrary.lib_backend.entity.*;
 import com.delibrary.lib_backend.exception.ClientNotFoundException;
@@ -14,6 +15,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -30,6 +33,8 @@ public class ClientDocumentService {
 
     @Autowired
     private BorrowRecordCopiesRepository borrowRecordCopiesRepository;
+
+    private static final double OVERDUE_FEE_PER_DAY = 0.50; // $0.50 per day
 
     public Page<Document> searchDocuments(DocumentSearchDto searchDTO, Pageable pageable) {
 
@@ -50,7 +55,7 @@ public class ClientDocumentService {
                 !dto.isOnlyAvailable();
     }
 
-    public Document borrowDocument(String documentId, String clientEmail) {
+    public Document borrowDocument(String documentId, String clientEmail, BorrowDurationRequest durationRequest) {
         Document document = documentRepository.findById(documentId)
                 .orElseThrow(() -> new DocumentNotFoundException(documentId));
 
@@ -62,9 +67,19 @@ public class ClientDocumentService {
             borrowRecord.setDocument(document);
             borrowRecord.setClient(clientRepository.findById(clientEmail).orElseThrow());
             borrowRecord.setBorrowDate(LocalDate.now());
-            borrowRecord.setDueDate(LocalDate.now().plusWeeks(4));
-            borrowRecordCopiesRepository.save(borrowRecord);
 
+            // Calculate due date based on duration
+            LocalDate dueDate;
+            int value = durationRequest != null ? durationRequest.getValue() : 4; // Default to 4 weeks
+            String unit = durationRequest != null ? durationRequest.getUnit().toLowerCase() : "weeks";
+            dueDate = switch (unit) {
+                case "days", "day" -> LocalDate.now().plusDays(value);
+                case "weeks", "week" -> LocalDate.now().plusWeeks(value);
+                default -> throw new IllegalArgumentException("Invalid duration unit: " + unit);
+            };
+            borrowRecord.setDueDate(dueDate);
+
+            borrowRecordCopiesRepository.save(borrowRecord);
             return documentRepository.save(document);
         } else {
             throw new DocumentNotAvailableException(documentId);
@@ -81,15 +96,38 @@ public class ClientDocumentService {
             address = client.getClientAddress().getAddress();
         }
 
+        // Get borrowed document IDs
         List<String> documentsBorrowed = client.getBorrowRecordCopies().stream()
                 .map(borrowRecord -> borrowRecord.getDocument().getDocumentId())
                 .collect(Collectors.toList());
+
+        // Calculate overdue fees
+        List<AccountInfoDto.OverdueDocument> overdueDocuments = new ArrayList<>();
+        double totalOverdueFees = 0.0;
+
+        LocalDate currentDate = LocalDate.now();
+        for (BorrowRecordCopies record : client.getBorrowRecordCopies()) {
+            LocalDate dueDate = record.getDueDate();
+            if (dueDate != null && dueDate.isBefore(currentDate)) {
+                int overdueDays = (int) ChronoUnit.DAYS.between(dueDate, currentDate);
+                double fee = overdueDays * OVERDUE_FEE_PER_DAY;
+                totalOverdueFees += fee;
+
+                overdueDocuments.add(new AccountInfoDto.OverdueDocument(
+                        record.getDocument().getDocumentId(),
+                        overdueDays,
+                        fee
+                ));
+            }
+        }
 
         return new AccountInfoDto(
                 client.getName(),
                 client.getEmail(),
                 address,
-                documentsBorrowed
+                documentsBorrowed,
+                totalOverdueFees,
+                overdueDocuments.isEmpty() ? null : overdueDocuments // Omit if no overdue documents
         );
     }
 }

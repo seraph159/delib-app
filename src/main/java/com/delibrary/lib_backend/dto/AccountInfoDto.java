@@ -14,4 +14,15 @@ public class AccountInfoDto {
     private String email;
     private String address;
     private List<String> documentsBorrowed;
+    private double totalOverdueFees; // New field for total overdue fees
+    private List<OverdueDocument> overdueDocuments; // Optional: detailed overdue info
+
+    @Data
+    @AllArgsConstructor
+    @NoArgsConstructor
+    public static class OverdueDocument {
+        private String documentId;
+        private int overdueDays;
+        private double fee;
+    }
 }
