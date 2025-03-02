@@ -2,6 +2,8 @@ package com.delibrary.lib_backend.controller;
 
 import com.delibrary.lib_backend.client.imagestorage.ImageStorageClient;
 import com.delibrary.lib_backend.dto.*;
+import com.delibrary.lib_backend.entity.Document;
+import com.delibrary.lib_backend.service_client.ClientDocumentService;
 import com.delibrary.lib_backend.service_librarian.ClientService;
 import com.delibrary.lib_backend.service_librarian.LibrarianDocumentService;
 import jakarta.persistence.EntityNotFoundException;
@@ -26,6 +28,9 @@ public class LibrarianController {
 
     @Autowired
     private ClientService clientService;
+
+    @Autowired
+    private ClientDocumentService clientDocumentService;
 
     @Autowired
     private LibrarianDocumentService documentService;
@@ -222,6 +227,41 @@ public class LibrarianController {
         try (InputStream inputStream = file.getInputStream()) {
             String imageUrl = this.imageStorageClient.uploadImage(containerName, file.getOriginalFilename(), inputStream, file.getSize());
             return ResponseEntity.ok().body(imageUrl);
+        }
+    }
+
+    @PostMapping("/borrow/{clientEmail}/{documentId}")
+    public ResponseEntity<?> borrowDocumentForClient(
+            @PathVariable String clientEmail,
+            @PathVariable String documentId,
+            @RequestBody(required = false) BorrowDurationRequest durationRequest) {
+        try {
+            Document borrowedDocument = clientDocumentService.borrowDocument(documentId, clientEmail, durationRequest);
+            return ResponseEntity.ok(borrowedDocument);
+        } catch (EntityNotFoundException e) {
+            logger.warn("Entity not found: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
+        } catch (Exception e) {
+            logger.error("Error borrowing document for client: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Error borrowing document: " + e.getMessage());
+        }
+    }
+
+    @PostMapping("/return/{clientEmail}/{documentId}")
+    public ResponseEntity<?> returnDocumentForClient(
+            @PathVariable String clientEmail,
+            @PathVariable String documentId) {
+        try {
+            Document returnedDocument = clientDocumentService.returnDocument(documentId, clientEmail);
+            return ResponseEntity.ok(returnedDocument);
+        } catch (EntityNotFoundException e) {
+            logger.warn("Entity not found: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
+        } catch (Exception e) {
+            logger.error("Error returning document for client: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Error returning document: " + e.getMessage());
         }
     }
 }
