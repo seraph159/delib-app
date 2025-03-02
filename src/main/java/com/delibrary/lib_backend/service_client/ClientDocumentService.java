@@ -8,6 +8,7 @@ import com.delibrary.lib_backend.exception.ClientNotFoundException;
 import com.delibrary.lib_backend.exception.DocumentNotAvailableException;
 import com.delibrary.lib_backend.exception.DocumentNotFoundException;
 import com.delibrary.lib_backend.repository.*;
+import jakarta.persistence.EntityNotFoundException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -17,7 +18,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 
@@ -56,8 +59,20 @@ public class ClientDocumentService {
     }
 
     public Document borrowDocument(String documentId, String clientEmail, BorrowDurationRequest durationRequest) {
+
         Document document = documentRepository.findById(documentId)
                 .orElseThrow(() -> new DocumentNotFoundException(documentId));
+
+        Client client = clientRepository.findById(clientEmail)
+                .orElseThrow(() -> new ClientNotFoundException(clientEmail));
+
+        // Check for existing active borrow record
+        Optional<BorrowRecordCopies> existingBorrow = borrowRecordCopiesRepository
+                .findByClientAndDocumentAndReturnDateIsNull(client, document);
+
+        if (existingBorrow.isPresent()) {
+            throw new IllegalStateException("Client " + clientEmail + " has already borrowed document " + documentId + " and it has not been returned.");
+        }
 
         if (document.getAvailableCopies() > 0) {
             document.setAvailableCopies(document.getAvailableCopies() - 1);
@@ -78,12 +93,44 @@ public class ClientDocumentService {
                 default -> throw new IllegalArgumentException("Invalid duration unit: " + unit);
             };
             borrowRecord.setDueDate(dueDate);
+            borrowRecord.setReturnDate(null);
 
             borrowRecordCopiesRepository.save(borrowRecord);
             return documentRepository.save(document);
         } else {
             throw new DocumentNotAvailableException(documentId);
         }
+    }
+
+    public Document returnDocument(String documentId, String clientEmail) {
+        Document document = documentRepository.findById(documentId)
+                .orElseThrow(() -> new DocumentNotFoundException(documentId));
+
+        Client client = clientRepository.findById(clientEmail)
+                .orElseThrow(() -> new ClientNotFoundException(clientEmail));
+
+        // Find all active borrow records (returnDate is null)
+        List<BorrowRecordCopies> borrowRecords = borrowRecordCopiesRepository
+                .findAllByClientAndDocumentAndReturnDateIsNull(client, document);
+
+        if (borrowRecords.isEmpty()) {
+            throw new EntityNotFoundException("No active borrow record found for document " + documentId + " and client " + clientEmail);
+        }
+
+        // If multiple active borrows exists, return the oldest borrow record (based on borrowDate)
+        BorrowRecordCopies borrowRecord = borrowRecords.stream()
+                .min(Comparator.comparing(BorrowRecordCopies::getBorrowDate))
+                .orElseThrow(() -> new EntityNotFoundException("Error processing borrow records"));
+
+        // Mark as returned
+        borrowRecord.setReturnDate(LocalDate.now());
+        borrowRecordCopiesRepository.save(borrowRecord);
+
+        // Update document availability
+        document.setAvailableCopies(document.getAvailableCopies() + 1);
+        document.setNoOfBorrowers(document.getNoOfBorrowers() - 1);
+
+        return documentRepository.save(document);
     }
 
     public AccountInfoDto getAccountInfo(String email) {

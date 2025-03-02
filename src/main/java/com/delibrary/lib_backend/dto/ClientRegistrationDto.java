@@ -4,6 +4,8 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
+
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -16,6 +18,7 @@ public class ClientRegistrationDto {
     private String city;
     private String state;
     private String zipcode;
+    private List<String> documentsBorrowed;
 
     public ClientRegistrationDto(String email, String name, String address, String city, String state, String zipcode) {
         this.email = email;

@@ -29,6 +29,8 @@ public class BorrowRecordCopies {
 
     private LocalDate dueDate;
 
+    private LocalDate returnDate; // To track when the document is returned
+
     @ManyToOne
     @JoinColumn(name = "documentId")
     private Document document;
