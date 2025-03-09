@@ -6,6 +6,11 @@ deLib is a robust and efficient library management system designed to streamline
 
 ---
 
+## 🌐 Frontend Repository
+The frontend code for HotelGenie is located at: [https://github.com/seraph159/delib-app-frontend](https://github.com/seraph159/delib-app-frontend)
+
+---
+
 ## 🌟 Features
 
 ### 🔐 User Management
@@ -80,6 +85,18 @@ deLib is a robust and efficient library management system designed to streamline
 
 4. **Access the application:**
    - Backend APIs: [http://localhost:8080](http://localhost:8080)
+
+---
+
+## 🔑 Mock Login Credentials
+
+### Librarian
+- **Username:** `lib@delib.com`
+- **Password:** `password123`
+
+### Client
+- **Username:** `client@delib.com`
+- **Password:** `password123`
 
 ---
 
